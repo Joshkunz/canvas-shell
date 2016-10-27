@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+from canvas import Canvas, CanvasError
+from argparse import ArgumentParser
+import shlex
+import sys
+from pprint import pprint
+
+def find_items(listing, name):
+    return find_by(listing, lambda x: cannonical_name(x) == name)
+
+def find_by(arr, func):
+    return [x for x in arr if func(x)]
+
+def pick_item(found):
+    if not found: return None
+    if len(found) == 1: return found[0]
+    print "Multiple items with the same name found..."
+    for i, f in enumerate(found):
+        print "    {0}) {1}:{2}".format(i, cannonical_name(f), f.id)
+    while True:
+        try:
+            index = int(raw_input("Pick one: ").strip().lower())
+        except ValueError:
+            print "Option must be a number."
+            continue
+        if index < 0 or index > (len(found) - 1):
+            print "Option '{0}' is not valid.".forma(index)
+        return found[index]
+
+def find_item(listing, name):
+    return pick_item(find_items(listing, name))
+    
+def find_folder(listing, name):
+    f = pick_item(find_items(listing, name))
+    if f is None or f.is_file():
+        return None
+    return f
+
+def cannonical_name(obj):
+    if obj.is_folder(): return obj.name
+    elif obj.is_file(): return obj.filename
+    else: raise ValueError(obj)
+
+def enter_shell(canvas):
+    path = [canvas.root_folder(Canvas.USER_TYPE, Canvas.OWN_USER_ID)]
+    current_listing = canvas.folder_list(path[-1])
+    current_listing.sort(key = cannonical_name)
+    while True:
+        _action = raw_input("{0}> ".format(path[-1].full_name)).strip()
+        tokens = shlex.split(_action)
+        if tokens[0] == "ls":
+            for e in current_listing:
+                if e.is_folder():
+                    print e.name + "/"
+                else:
+                    print e.filename
+        elif tokens[0] == "cd":
+            if len(tokens) == 0 or tokens[1] == "..":
+                if len(path) > 1:
+                    path.pop(-1)
+            else:
+                folder = find_folder(current_listing, tokens[1])
+                if folder is None:
+                    print "Cannot cd into '{0}', does not exist.".format(tokens[1])
+                    continue
+                path.append(folder)
+            current_listing = canvas.folder_list(path[-1])
+            current_listing.sort(key = cannonical_name)
+        elif tokens[0] == "exit":
+            sys.exit(0)
+        elif tokens[0] == "stat":
+            f = find_item(current_listing, tokens[1])
+            if f is None:
+                print "Cannot stat '{0}'".format(tokens[1])
+            else:
+                pprint(f._data)
+        else:
+            print "Unrecognized Command: '{0}'".format(action)
+
+def get_canvas(args):
+    host = args.host
+    if not host:
+        host = raw_input("Canvas Hostname: ").strip()
+    else:
+        host = host[0]
+    token = args.token
+    if not token:
+        token = raw_input("Canvas API Token: ").strip()
+    else:
+        token = token[0]
+    return Canvas(token, host)
+
+parser = ArgumentParser()
+parser.add_argument("-s", "--host", help="Canvas installation hostname", nargs=1)
+parser.add_argument("-t", "--token", help="Canvas API token", nargs=1)
+args = parser.parse_args()
+
+enter_shell(get_canvas(args))
